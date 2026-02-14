@@ -214,6 +214,68 @@ function drawScroller() {
   if (scrollX < -scrollText.length * charW) scrollX = w;
 }
 
+// Rotating pixelated 3D earth
+// Rough continent map encoded as bit rows (36 cols x 18 rows, lon x lat)
+const EARTH_MAP = [
+  0x000000000,0x000000000,0x0C0600000,0x1E0F00000,
+  0x3F1F80000,0x7F3FC0600,0x3F9FE0F00,0x1F8FF1F80,
+  0x0F807F0C0,0x07003E040,0x02001C000,0x01000E000,
+  0x0000070C0,0x00000F1E0,0x00001F3F0,0x00000E1E0,
+  0x000004080,0x000000000,
+];
+
+function drawEarth() {
+  const cx = w / 2, cy = h / 2 + Math.sin(t * 0.04) * 15;
+  const radius = Math.min(w, h) * 0.22;
+  const pxSize = 6;
+  const rot = t * 0.008;
+
+  for (let sy = -radius; sy < radius; sy += pxSize) {
+    for (let sx = -radius; sx < radius; sx += pxSize) {
+      const dist = Math.sqrt(sx * sx + sy * sy);
+      if (dist > radius) continue;
+
+      // Sphere mapping
+      const nz = Math.sqrt(1 - (sx * sx + sy * sy) / (radius * radius));
+      const nx = sx / radius;
+      const ny = sy / radius;
+
+      // Rotate around Y
+      const rx = nx * Math.cos(rot) + nz * Math.sin(rot);
+      const rz = -nx * Math.sin(rot) + nz * Math.cos(rot);
+
+      // Spherical coords to texture lookup
+      const lon = Math.atan2(rx, rz); // -PI to PI
+      const lat = Math.asin(ny);      // -PI/2 to PI/2
+
+      const u = ((lon / Math.PI + 1) * 0.5 * 36) | 0;
+      const v = ((lat / (Math.PI / 2) + 1) * 0.5 * 18) | 0;
+
+      // Check continent map
+      let land = false;
+      if (v >= 0 && v < 18 && u >= 0 && u < 36) {
+        land = (EARTH_MAP[v] >> (35 - u)) & 1;
+      }
+
+      // Shading based on Z depth
+      const shade = 0.4 + nz * 0.6;
+      let r, g, b;
+      if (land) {
+        r = (40 * shade) | 0;
+        g = (140 * shade) | 0;
+        b = (50 * shade) | 0;
+      } else {
+        r = (20 * shade) | 0;
+        g = (50 * shade) | 0;
+        b = (160 * shade) | 0;
+      }
+
+      ctx.fillStyle = `rgb(${r},${g},${b})`;
+      ctx.fillRect((cx + sx) | 0, (cy + sy) | 0, pxSize, pxSize);
+    }
+  }
+}
+
 // Raster bars behind logo
 function drawRasterBars() {
   const cy = h / 2;
@@ -431,6 +493,7 @@ function frame() {
   drawStars();
   drawCopper();
   drawRasterBars();
+  drawEarth();
   drawLogo();
   drawDucks();
   drawScroller();
