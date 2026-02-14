@@ -42,12 +42,16 @@ function drawStars() {
   for (let i = 0; i < STARS; i++) {
     sz[i] -= 3;
     if (sz[i] < 1) { sz[i] = 1000; sx[i] = (Math.random() - 0.5) * 2000; sy[i] = (Math.random() - 0.5) * 2000; }
-    const px = sx[i] / sz[i] * 300 + w / 2;
-    const py = sy[i] / sz[i] * 300 + h / 2;
+    // Barrel rotation
+    const angle = t * 0.01;
+    const rx = sx[i] * Math.cos(angle) - sy[i] * Math.sin(angle);
+    const ry = sx[i] * Math.sin(angle) + sy[i] * Math.cos(angle);
+    const px = rx / sz[i] * 300 + w / 2;
+    const py = ry / sz[i] * 300 + h / 2;
     const br = Math.min(255, (1 - sz[i] / 1000) * 255) | 0;
-    const size = (1 - sz[i] / 1000) * 2.5;
+    const size = (1 - sz[i] / 1000) * 8;
     ctx.fillStyle = `rgb(${br},${br},${br + 40 | 0})`;
-    ctx.fillRect(px, py, size, size);
+    ctx.fillRect(px | 0, py | 0, size | 0, size | 0);
   }
 }
 
@@ -74,11 +78,15 @@ function drawCopper() {
 }
 
 // Plasma background (low res for perf)
-const plasmaScale = 6;
+const plasmaScale = 12;
+const plasmaCanvas = document.createElement('canvas');
+const plasmaCtx = plasmaCanvas.getContext('2d');
 function drawPlasma() {
   const pw = (w / plasmaScale) | 0;
   const ph = (h / plasmaScale) | 0;
-  const imgData = ctx.createImageData(pw, ph);
+  plasmaCanvas.width = pw;
+  plasmaCanvas.height = ph;
+  const imgData = plasmaCtx.createImageData(pw, ph);
   const d = imgData.data;
   for (let y = 0; y < ph; y++) {
     for (let x = 0; x < pw; x++) {
@@ -94,8 +102,9 @@ function drawPlasma() {
       d[i + 3] = 255;
     }
   }
-  ctx.putImageData(imgData, 0, 0);
-  ctx.drawImage(c, 0, 0, pw, ph, 0, 0, w, h);
+  plasmaCtx.putImageData(imgData, 0, 0);
+  ctx.imageSmoothingEnabled = false;
+  ctx.drawImage(plasmaCanvas, 0, 0, pw, ph, 0, 0, w, h);
 }
 
 // Big chunky pixel font for SUPADEVA
@@ -116,10 +125,9 @@ function drawChar(ch, ox, oy, size, r, g, b) {
     let bits = rows[y];
     for (let x = 0; x < 8; x++) {
       if (bits & (0x80 >> x)) {
-        const glow = 0.6 + sin(t * 4 + (ox + x) * 30 + y * 50) * 0.4;
-        const rr = (r * glow) | 0;
-        const gg = (g * glow) | 0;
-        const bb = (b * glow) | 0;
+        const rr = r;
+        const gg = g;
+        const bb = b;
         ctx.fillStyle = `rgb(${rr},${gg},${bb})`;
         ctx.fillRect(ox + x * size, oy + y * size, size, size);
         // Glow
@@ -131,25 +139,29 @@ function drawChar(ch, ox, oy, size, r, g, b) {
 }
 
 function drawLogo() {
-  const text = "SUPADEVA";
+  const lines = ["SUPA", "DEVA"];
   const charW = 9;
-  const size = Math.min(w / (charW * text.length + 4), h / 14) | 0;
-  const totalW = text.length * charW * size;
-  const baseX = (w - totalW) / 2;
-  const baseY = h / 2 - (7 * size) / 2;
+  const size = Math.min(w / (charW * 4 + 4), h / 28) | 0;
+  const lineH = 8 * size;
+  const totalH = lines.length * lineH;
+  const baseY = h / 2 - totalH / 2;
 
-  for (let i = 0; i < text.length; i++) {
-    const ch = text[i];
-    const wobbleY = sin(t * 5 + i * 180) * size * 2;
-    const ox = baseX + i * charW * size;
-    const oy = baseY + wobbleY;
+  for (let l = 0; l < lines.length; l++) {
+    const text = lines[l];
+    const totalW = text.length * charW * size;
+    const baseX = (w - totalW) / 2;
+    for (let i = 0; i < text.length; i++) {
+      const ch = text[i];
+      const wobbleY = sin(t * 5 + i * 180) * size * 2;
+      const ox = baseX + i * charW * size;
+      const oy = baseY + l * lineH + wobbleY;
 
-    // Color cycling per character
-    const r = 200 + sin(t * 3 + i * 200) * 55 | 0;
-    const g = 160 + sin(t * 2.5 + i * 250 + 400) * 95 | 0;
-    const b = 230 + sin(t * 2 + i * 180 + 800) * 25 | 0;
+      const r = 255;
+      const g = 255;
+      const b = 255;
 
-    drawChar(ch, ox, oy, size, r, g, b);
+      drawChar(ch, ox, oy, size, r, g, b);
+    }
   }
 }
 
