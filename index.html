@@ -1,0 +1,210 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>SUPADEVA</title>
+<style>
+  * { margin: 0; padding: 0; }
+  body { background: #000; overflow: hidden; }
+  canvas { display: block; }
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<script>
+const c = document.getElementById('c');
+const ctx = c.getContext('2d');
+let w, h, t = 0;
+
+function resize() {
+  w = c.width = innerWidth;
+  h = c.height = innerHeight;
+}
+resize();
+addEventListener('resize', resize);
+
+// Precompute sine table
+const SIN = new Float32Array(2048);
+for (let i = 0; i < 2048; i++) SIN[i] = Math.sin(i * Math.PI * 2 / 2048);
+function sin(v) { return SIN[((v % 2048) + 2048) % 2048 | 0]; }
+function cos(v) { return SIN[(((v + 512) % 2048) + 2048) % 2048 | 0]; }
+
+// Star field
+const STARS = 300;
+const sx = new Float32Array(STARS), sy = new Float32Array(STARS), sz = new Float32Array(STARS);
+for (let i = 0; i < STARS; i++) {
+  sx[i] = (Math.random() - 0.5) * 2000;
+  sy[i] = (Math.random() - 0.5) * 2000;
+  sz[i] = Math.random() * 1000;
+}
+
+function drawStars() {
+  for (let i = 0; i < STARS; i++) {
+    sz[i] -= 3;
+    if (sz[i] < 1) { sz[i] = 1000; sx[i] = (Math.random() - 0.5) * 2000; sy[i] = (Math.random() - 0.5) * 2000; }
+    const px = sx[i] / sz[i] * 300 + w / 2;
+    const py = sy[i] / sz[i] * 300 + h / 2;
+    const br = Math.min(255, (1 - sz[i] / 1000) * 255) | 0;
+    const size = (1 - sz[i] / 1000) * 2.5;
+    ctx.fillStyle = `rgb(${br},${br},${br + 40 | 0})`;
+    ctx.fillRect(px, py, size, size);
+  }
+}
+
+// Copper bars
+function drawCopper() {
+  const barY = h * 0.15;
+  for (let y = 0; y < 6; y++) {
+    const yy = barY + y * 3;
+    const r = 100 + sin(t * 3 + y * 100) * 80 | 0;
+    const g = 60 + sin(t * 2.5 + y * 120 + 300) * 60 | 0;
+    const b = 160 + sin(t * 2 + y * 80 + 600) * 95 | 0;
+    ctx.fillStyle = `rgb(${r},${g},${b})`;
+    ctx.fillRect(0, yy, w, 3);
+  }
+  const barY2 = h * 0.78;
+  for (let y = 0; y < 6; y++) {
+    const yy = barY2 + y * 3;
+    const r = 160 + sin(t * 2 + y * 80 + 200) * 95 | 0;
+    const g = 80 + sin(t * 3 + y * 100 + 500) * 70 | 0;
+    const b = 120 + sin(t * 2.5 + y * 120) * 80 | 0;
+    ctx.fillStyle = `rgb(${r},${g},${b})`;
+    ctx.fillRect(0, yy, w, 3);
+  }
+}
+
+// Plasma background (low res for perf)
+const plasmaScale = 6;
+function drawPlasma() {
+  const pw = (w / plasmaScale) | 0;
+  const ph = (h / plasmaScale) | 0;
+  const imgData = ctx.createImageData(pw, ph);
+  const d = imgData.data;
+  for (let y = 0; y < ph; y++) {
+    for (let x = 0; x < pw; x++) {
+      const v1 = sin(x * 8 + t * 2);
+      const v2 = sin(y * 6 + t * 3);
+      const v3 = sin((x * 5 + y * 5) + t * 1.5);
+      const v4 = sin(Math.sqrt(x * x + y * y) * 4 + t * 2.5);
+      const v = (v1 + v2 + v3 + v4) * 0.25;
+      const i = (y * pw + x) * 4;
+      d[i]     = (v * 70 + 50) | 0;
+      d[i + 1] = (v * 40 + 25) | 0;
+      d[i + 2] = (v * 80 + 60) | 0;
+      d[i + 3] = 255;
+    }
+  }
+  ctx.putImageData(imgData, 0, 0);
+  ctx.drawImage(c, 0, 0, pw, ph, 0, 0, w, h);
+}
+
+// Big chunky pixel font for SUPADEVA
+const FONT = {
+  S: [0x7C,0xC0,0xC0,0x78,0x0C,0x0C,0xF8],
+  U: [0xCC,0xCC,0xCC,0xCC,0xCC,0xCC,0x78],
+  P: [0xF8,0xCC,0xCC,0xF8,0xC0,0xC0,0xC0],
+  A: [0x30,0x78,0xCC,0xCC,0xFC,0xCC,0xCC],
+  D: [0xF0,0xD8,0xCC,0xCC,0xCC,0xD8,0xF0],
+  E: [0xFC,0xC0,0xC0,0xF0,0xC0,0xC0,0xFC],
+  V: [0xCC,0xCC,0xCC,0xCC,0xCC,0x78,0x30],
+};
+
+function drawChar(ch, ox, oy, size, r, g, b) {
+  const rows = FONT[ch];
+  if (!rows) return;
+  for (let y = 0; y < 7; y++) {
+    let bits = rows[y];
+    for (let x = 0; x < 8; x++) {
+      if (bits & (0x80 >> x)) {
+        const glow = 0.6 + sin(t * 4 + (ox + x) * 30 + y * 50) * 0.4;
+        const rr = (r * glow) | 0;
+        const gg = (g * glow) | 0;
+        const bb = (b * glow) | 0;
+        ctx.fillStyle = `rgb(${rr},${gg},${bb})`;
+        ctx.fillRect(ox + x * size, oy + y * size, size, size);
+        // Glow
+        ctx.fillStyle = `rgba(${rr},${gg},${bb},0.3)`;
+        ctx.fillRect(ox + x * size - 1, oy + y * size - 1, size + 2, size + 2);
+      }
+    }
+  }
+}
+
+function drawLogo() {
+  const text = "SUPADEVA";
+  const charW = 9;
+  const size = Math.min(w / (charW * text.length + 4), h / 14) | 0;
+  const totalW = text.length * charW * size;
+  const baseX = (w - totalW) / 2;
+  const baseY = h / 2 - (7 * size) / 2;
+
+  for (let i = 0; i < text.length; i++) {
+    const ch = text[i];
+    const wobbleY = sin(t * 5 + i * 180) * size * 2;
+    const ox = baseX + i * charW * size;
+    const oy = baseY + wobbleY;
+
+    // Color cycling per character
+    const r = 200 + sin(t * 3 + i * 200) * 55 | 0;
+    const g = 160 + sin(t * 2.5 + i * 250 + 400) * 95 | 0;
+    const b = 230 + sin(t * 2 + i * 180 + 800) * 25 | 0;
+
+    drawChar(ch, ox, oy, size, r, g, b);
+  }
+}
+
+// Scroll text
+const scrollText = "     SUPADEVA --- THE CODE GROUP --- GREETINGS TO ALL CODERS OUT THERE --- KEEP HACKING --- 2026 ---          ";
+let scrollX = w;
+
+function drawScroller() {
+  const scrollY = h * 0.88;
+  ctx.font = 'bold 20px monospace';
+  const charW = 14;
+
+  for (let i = 0; i < scrollText.length; i++) {
+    const x = scrollX + i * charW;
+    if (x < -charW || x > w + charW) continue;
+    const wobble = sin(t * 6 + i * 60) * 8;
+    const r = 230 + sin(t * 3 + i * 40) * 25 | 0;
+    const g = 210 + sin(t * 2 + i * 50 + 300) * 45 | 0;
+    const b = 255;
+    ctx.fillStyle = `rgb(${r},${g},${b})`;
+    ctx.fillText(scrollText[i], x, scrollY + wobble);
+  }
+  scrollX -= 2;
+  if (scrollX < -scrollText.length * charW) scrollX = w;
+}
+
+// Raster bars behind logo
+function drawRasterBars() {
+  const cy = h / 2;
+  for (let i = -40; i < 40; i++) {
+    const y = cy + i * 3;
+    const intensity = 1 - Math.abs(i) / 40;
+    const r = sin(t * 2 + i * 30) * 30 * intensity | 0;
+    const g = sin(t * 2.5 + i * 40 + 200) * 20 * intensity | 0;
+    const b = sin(t * 3 + i * 50 + 500) * 40 * intensity | 0;
+    ctx.fillStyle = `rgba(${80 + r},${40 + g},${90 + b},${intensity * 0.3})`;
+    ctx.fillRect(0, y, w, 3);
+  }
+}
+
+function frame() {
+  t++;
+  ctx.fillStyle = '#000';
+  ctx.fillRect(0, 0, w, h);
+
+  drawPlasma();
+  drawStars();
+  drawCopper();
+  drawRasterBars();
+  drawLogo();
+  drawScroller();
+
+  requestAnimationFrame(frame);
+}
+frame();
+</script>
+</body>
+</html>
