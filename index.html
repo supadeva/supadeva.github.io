@@ -230,6 +230,18 @@ function drawRasterBars() {
 
 // --- 8-bit music engine (Second Reality inspired) ---
 let audioStarted = false;
+let muted = false;
+let masterGain = null;
+
+function toggleAudio() {
+  if (!audioStarted) {
+    startAudio();
+    return;
+  }
+  muted = !muted;
+  masterGain.gain.value = muted ? 0 : 0.35;
+}
+
 function startAudio() {
   if (audioStarted) return;
   audioStarted = true;
@@ -237,6 +249,7 @@ function startAudio() {
   const master = ac.createGain();
   master.gain.value = 0.35;
   master.connect(ac.destination);
+  masterGain = master;
 
   // note freq helper
   const noteFreq = n => 440 * Math.pow(2, (n - 69) / 12);
@@ -339,21 +352,13 @@ function startAudio() {
   scheduler();
 }
 
-document.addEventListener('click', startAudio, { once: true });
-document.addEventListener('keydown', startAudio, { once: true });
+document.addEventListener('click', toggleAudio);
+document.addEventListener('keydown', toggleAudio, { once: true });
 
 function frame() {
   t++;
   ctx.fillStyle = '#000';
   ctx.fillRect(0, 0, w, h);
-
-  if (!audioStarted) {
-    ctx.fillStyle = 'rgba(255,255,255,' + (0.4 + Math.sin(t * 0.05) * 0.3) + ')';
-    ctx.font = '16px monospace';
-    ctx.textAlign = 'center';
-    ctx.fillText('CLICK TO START', w / 2, h * 0.06);
-    ctx.textAlign = 'left';
-  }
 
   drawPlasma();
   drawStars();
@@ -361,6 +366,17 @@ function frame() {
   drawRasterBars();
   drawLogo();
   drawScroller();
+
+  if (!audioStarted || muted) {
+    ctx.save();
+    ctx.translate(80, 40);
+    ctx.rotate(Math.sin(t * 0.03) * 0.3);
+    ctx.font = '12px monospace';
+    ctx.fillStyle = '#fff';
+    ctx.textAlign = 'center';
+    ctx.fillText(audioStarted ? 'click for tunes' : 'click for tunes', 0, 0);
+    ctx.restore();
+  }
 
   requestAnimationFrame(frame);
 }
